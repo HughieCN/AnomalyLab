@@ -126,8 +126,7 @@ class Panel:
         return self._fm_preprocessor
 
     def format_preprocessor(self, path: str) -> FormatExcel:
-        if self._format_preprocessor is None:
-            self._format_preprocessor = FormatExcel(path=path)
+        self._format_preprocessor = FormatExcel(path=path)
         return self._format_preprocessor
 
     def normalize(
@@ -486,7 +485,7 @@ class Panel:
         groups: Union[int, list[int]],
         sort_type: Literal["independent", "dependent"] = "independent",
         inplace: bool = False,
-    ) -> tuple:
+    ) -> Optional[pd.DataFrame]:
         """Group variables into portfolios based on specified groups.
 
         This method creates portfolios for the specified variables in the panel data.
@@ -735,6 +734,10 @@ if __name__ == "__main__":
         # no_process_columns="MktCap",
         # process_all_characteristics=True,
     )
+
+    panel.winsorize(method="winsorize", group_columns="date")
+    pp(panel)
+
     # panel.normalize(
     #     # columns="MktCap",
     #     method="zscore",
@@ -743,9 +746,6 @@ if __name__ == "__main__":
     #     # process_all_characteristics=False,
     # )
     # panel.shift(periods=1, drop_original=False)
-
-    panel.winsorize(method="winsorize", group_columns="date")
-    pp(panel)
 
     # summary = panel.summary()
     # pp(summary)
