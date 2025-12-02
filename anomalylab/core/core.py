@@ -136,7 +136,7 @@ class Panel:
         group_columns: Columns = None,
         no_process_columns: Columns = None,
         process_all_characteristics: bool = True,
-        fillna_zero: bool = False,
+        fillna_zero_after_norm: bool = False,
     ) -> Panel:
         """
         Normalizes specified columns of the DataFrame using the chosen method.
@@ -157,7 +157,7 @@ class Panel:
                 normalization. Defaults to None.
             process_all_characteristics (bool, optional): Whether to process all
                 characteristics or not. Defaults to True.
-            fillna_zero (bool): If True, fills NaN values with zero after normalization.
+            fillna_zero_after_norm (bool): If True, fills NaN values with zero after normalization.
                 Defaults to False.
 
         Returns:
@@ -173,7 +173,7 @@ class Panel:
             group_columns=group_columns,
             no_process_columns=no_process_columns,
             process_all_characteristics=process_all_characteristics,
-            fillna_zero=fillna_zero,
+            fillna_zero_after_norm=fillna_zero_after_norm,
         ).panel_data
         return self
 
