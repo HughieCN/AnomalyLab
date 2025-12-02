@@ -58,8 +58,6 @@ class PanelData(Data):
 
         This method identifies remaining columns as firm characteristics, excluding classifications.
         """
-        if self.is_copy:
-            self.df = copy.deepcopy(self.df)
         self.df[self.id] = self.df[self.id].astype(int)
         if not isinstance(self.df[self.time].dtype, pd.PeriodDtype):
             self.df[self.time] = pd.to_datetime(self.df[self.time], format="ISO8601")
@@ -116,6 +114,9 @@ class PanelData(Data):
             ValueError: If any required columns are missing from the DataFrame.
             ValueError: If there are no firm characteristics remaining after checking.
         """
+        if self.is_copy:
+            self.df = copy.deepcopy(self.df)
+
         # Check for duplicate column names
         duplicated_columns = self.df.columns[self.df.columns.duplicated()].tolist()
         if duplicated_columns:

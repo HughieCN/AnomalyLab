@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from anomalylab.structure import PanelData, TimeSeries
+from anomalylab.structure import PanelData
 from anomalylab.utils.imports import *
 from anomalylab.utils.utils import *
 
