@@ -1,10 +1,16 @@
-from pandas import DataFrame
+import math
+import warnings
+from dataclasses import dataclass
+from typing import Literal, Optional, Union
 
-from anomalylab.config import *
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from pandas import DataFrame, Series
+
 from anomalylab.empirical.empirical import Empirical
 from anomalylab.structure import PanelData, TimeSeries
-from anomalylab.utils.imports import *
-from anomalylab.utils.utils import *
+from anomalylab.utils import pp, round_to_string
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -116,7 +122,7 @@ class PortfolioAnalysis(Empirical):
         group_col = [self.time]
         for i, var in enumerate(vars):
             if sort_type == "dependent" and i > 0:
-                group_col.append(f"{vars[i-1]}_g{groups[i-1]}")
+                group_col.append(f"{vars[i - 1]}_g{groups[i - 1]}")
                 out_df[f"{var}_g{groups[i]}"] = (
                     out_df.groupby(group_col, observed=False)[var]
                     .apply(
@@ -127,7 +133,7 @@ class PortfolioAnalysis(Empirical):
                         )
                     )
                     .reset_index()
-                    .set_index(f"level_{i+1}")
+                    .set_index(f"level_{i + 1}")
                     .drop(group_col, axis=1)
                 )
             else:
@@ -142,7 +148,7 @@ class PortfolioAnalysis(Empirical):
                         )
                     )
                     .reset_index()
-                    .set_index(f"level_1")
+                    .set_index("level_1")
                     .drop(self.time, axis=1)
                 )
 

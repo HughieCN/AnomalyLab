@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import warnings
+from dataclasses import dataclass
+from typing import Literal
+
+import numpy as np
+from pandas import DataFrame, Series
+
 from anomalylab.preprocess.preprocessor import Preprocessor
 from anomalylab.structure import PanelData
-from anomalylab.utils.imports import *
-from anomalylab.utils.utils import *
+from anomalylab.utils import Columns, columns_to_list, pp
 
 
 class NormalizeMethod:
@@ -54,8 +60,11 @@ class NormalizeMethod:
 
     @classmethod
     def call_method(
-        cls, method: str, df: DataFrame, fillna_zero_after_norm: bool = False
-    ) -> DataFrame:
+        cls,
+        method: str,
+        df: DataFrame | Series,
+        fillna_zero_after_norm: bool = False,
+    ) -> DataFrame | Series:
         """
         Calls a specified normalization method on the input DataFrame.
 
@@ -88,9 +97,15 @@ class NormalizeMethod:
         if fillna_zero_after_norm:
             normalized_df = normalized_df.fillna(value=0)
         else:
-            all_nan_cols = df.columns[df.isna().all()].tolist()
-            if all_nan_cols:
-                warnings.warn(f"Columns {all_nan_cols} contain only missing values.")
+            if isinstance(df, Series):
+                if df.isna().all():
+                    warnings.warn(f"Column {df.name} contains only missing values.")
+            else:
+                all_nan_cols = df.columns[df.isna().all()].tolist()
+                if all_nan_cols:
+                    warnings.warn(
+                        f"Columns {all_nan_cols} contain only missing values."
+                    )
 
         return normalized_df
 

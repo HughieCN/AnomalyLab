@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from importlib import resources
+from dataclasses import dataclass, field
+from importlib import resources  # noqa: F401
+from typing import Literal, Optional, Union
 
-from anomalylab.config import *
+import pandas as pd
+from pandas import DataFrame
+
 from anomalylab.empirical import (
     Correlation,
     FamaMacBethRegression,
@@ -12,8 +16,7 @@ from anomalylab.empirical import (
 )
 from anomalylab.preprocess import FillNa, Normalize, OutlierHandler, Shift
 from anomalylab.structure import PanelData, TimeSeries
-from anomalylab.utils import *
-from anomalylab.utils.imports import *
+from anomalylab.utils import Columns, Scalar, pp
 from anomalylab.visualization import FormatExcel
 
 
