@@ -163,24 +163,33 @@ class PortfolioAnalysis(Empirical):
         else:
             return out_df
 
-    def _claculate_value(self, df: DataFrame, decimal: Optional[int] = None) -> dict:
+    def _claculate_value(
+        self, df: DataFrame, decimal: Optional[int] = None, is_endog_return: bool = True
+    ) -> dict:
         """Calculate various portfolio performance metrics.
 
         This method computes mean returns, t-values, Sharpe ratios, and model-adjusted alpha and t values.
 
         Args:
             df (DataFrame): The DataFrame containing the relevant data for calculations.
+            decimal (Optional[int]): The number of decimal places for formatting. Defaults to None.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             dict: A dictionary containing computed metrics.
         """
-        stat_dict = self._calculate_mean_and_t_value(df)
-        factors_dict = self._calculate_alpha_and_t_value(df)
-        sharpe_dict = self._calculate_sharpe(df, decimal)
+        stat_dict = self._calculate_mean_and_t_value(df, is_endog_return)
 
-        return {**stat_dict, **factors_dict, **sharpe_dict}
+        if is_endog_return:
+            factors_dict = self._calculate_alpha_and_t_value(df)
+            sharpe_dict = self._calculate_sharpe(df, decimal)
+            return {**stat_dict, **factors_dict, **sharpe_dict}
 
-    def _calculate_mean_and_t_value(self, df: DataFrame) -> dict:
+        return stat_dict
+
+    def _calculate_mean_and_t_value(
+        self, df: DataFrame, is_endog_return: bool = True
+    ) -> dict:
         """Calculate mean and t-value for the dependent variable.
 
         This method computes the mean return and its t-value assuming the null hypothesis
@@ -188,6 +197,7 @@ class PortfolioAnalysis(Empirical):
 
         Args:
             df (DataFrame): The DataFrame containing the relevant data for calculations.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             dict: A dictionary with mean, t-value, and p-value.
@@ -205,7 +215,9 @@ class PortfolioAnalysis(Empirical):
         mean_value = reg.params[0]
         t_value = reg.tvalues[0]
         p_value = reg.pvalues[0]
-        stat_dict["Return"] = mean_value
+
+        key_name = "Return" if is_endog_return else self.endog
+        stat_dict[key_name] = mean_value
         stat_dict["t"] = t_value
         stat_dict["p"] = p_value
 
@@ -290,6 +302,7 @@ class PortfolioAnalysis(Empirical):
         decimal: Optional[int] = None,
         factor_return: bool = False,
         already_grouped: bool = False,
+        is_endog_return: bool = True,
     ) -> tuple:
         """Perform univariate analysis on the specified core variable.
 
@@ -305,6 +318,7 @@ class PortfolioAnalysis(Empirical):
             factor_return (bool): Whether to output factor returns in the analysis. Defaults to False.
             already_grouped (bool): If True, skips the grouping step assuming data has been pre-grouped.
                 Defaults to False.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
@@ -405,10 +419,20 @@ class PortfolioAnalysis(Empirical):
             results = {}
 
             for key, sr in time_series_dict.items():
-                results[key] = self._claculate_value(sr, decimal=decimal)
+                results[key] = self._claculate_value(
+                    sr, decimal=decimal, is_endog_return=is_endog_return
+                )
 
+            key_name = "Return" if is_endog_return else self.endog
             data = []
             for key, values in results.items():
+                if key_name == core_var:
+                    if key_name in values:
+                        val = values.pop(key_name)
+                        new_values = {f"{key_name}_val": val}
+                        new_values.update(values)
+                        values = new_values
+
                 values[core_var] = key
                 data.append(values)
 
@@ -435,7 +459,7 @@ class PortfolioAnalysis(Empirical):
                 combined_results.iloc[:, i : i + 3] = subset
 
             combined_results = combined_results.loc[
-                :, ~combined_results.columns.str.endswith("p")
+                :, ~combined_results.columns.str.match(r"(^p$|.*-p$)")
             ]
 
             return combined_results
@@ -457,6 +481,7 @@ class PortfolioAnalysis(Empirical):
         decimal: Optional[int] = None,
         factor_return: bool = False,
         already_grouped: bool = False,
+        is_endog_return: bool = True,
     ) -> tuple:
         """Perform bivariate analysis on two specified variables.
 
@@ -476,6 +501,7 @@ class PortfolioAnalysis(Empirical):
             factor_return (bool): Whether to output factor returns in the analysis. Defaults to False.
             already_grouped (bool): If True, skips the grouping step assuming data has been pre-grouped.
                 Defaults to False.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
@@ -628,11 +654,21 @@ class PortfolioAnalysis(Empirical):
             results = {}
 
             for key, series in time_series_dict.items():
-                value_dict = self._claculate_value(series, decimal=decimal)
+                value_dict = self._claculate_value(
+                    series, decimal=decimal, is_endog_return=is_endog_return
+                )
                 results[key] = value_dict
 
+            key_name = "Return" if is_endog_return else self.endog
             data = []
             for key, values in results.items():
+                if key_name in [sort_var, core_var]:
+                    if key_name in values:
+                        val = values.pop(key_name)
+                        new_values = {f"{key_name}_val": val}
+                        new_values.update(values)
+                        values = new_values
+
                 values[sort_var] = key[0]
                 values[core_var] = key[1]
                 data.append(values)
@@ -660,7 +696,7 @@ class PortfolioAnalysis(Empirical):
                 combined_results.iloc[:, i : i + 3] = subset
 
             combined_results = combined_results.loc[
-                :, ~combined_results.columns.str.endswith("p")
+                :, ~combined_results.columns.str.match(r"(^p$|.*-p$)")
             ]
 
             def reorder_diff_avg(df: DataFrame) -> DataFrame:
@@ -739,17 +775,22 @@ if __name__ == "__main__":
 
     portfolio = PortfolioAnalysis(
         panel,
-        endog="return",
+        endog="IdioVol",
         weight="MktCap",
-        models=Models,
-        factors_series=time_series,
+        # models=Models,
+        # factors_series=time_series,
     )
 
     # portfolio.GroupN("Illiq", 10, inplace=True)
-    portfolio.GroupN(["MktCap", "Illiq"], [3, 5], sort_type="dependent", inplace=True)
+    portfolio.GroupN(["MktCap", "Illiq"], [5, 5], sort_type="dependent", inplace=True)
 
     uni_ew, uni_vw = portfolio.univariate_analysis(
-        "Illiq", 10, factor_return=False, already_grouped=False
+        "Illiq",
+        5,
+        format=True,
+        # factor_return=False,
+        already_grouped=True,
+        is_endog_return=False,
     )
     pp(uni_ew)
     pp(uni_vw)
@@ -757,13 +798,14 @@ if __name__ == "__main__":
     bi_ew, bi_vw = portfolio.bivariate_analysis(
         "MktCap",
         "Illiq",
-        3,
+        5,
         5,
         False,
-        False,
+        True,
         "dependent",
-        factor_return=False,
+        # factor_return=False,
         already_grouped=True,
+        is_endog_return=False,
     )
     pp(bi_ew)
     pp(bi_vw)

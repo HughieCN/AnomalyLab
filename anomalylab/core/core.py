@@ -532,6 +532,7 @@ class Panel:
         decimal: Optional[int] = None,
         factor_return: bool = False,
         already_grouped: bool = False,
+        is_endog_return: bool = True,
     ) -> tuple:
         """Perform univariate analysis on the specified core variable.
 
@@ -549,6 +550,7 @@ class Panel:
             factor_return (bool): Whether to output factor returns in the analysis. Defaults to False.
             already_grouped (bool): If True, skips the grouping step assuming data has been pre-grouped.
                 Defaults to False.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
@@ -562,6 +564,7 @@ class Panel:
             decimal=decimal,
             factor_return=factor_return,
             already_grouped=already_grouped,
+            is_endog_return=is_endog_return,
         )
 
     def bivariate_analysis(
@@ -580,6 +583,7 @@ class Panel:
         decimal: Optional[int] = None,
         factor_return: bool = False,
         already_grouped: bool = False,
+        is_endog_return: bool = True,
     ) -> tuple:
         """Perform bivariate analysis on two specified variables.
 
@@ -601,6 +605,7 @@ class Panel:
             factor_return (bool): Whether to output factor returns in the analysis. Defaults to False.
             already_grouped (bool): If True, skips the grouping step assuming data has been pre-grouped.
                 Defaults to False.
+            is_endog_return (bool): Whether the dependent variable is a return. Defaults to True.
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
@@ -618,6 +623,7 @@ class Panel:
             decimal=decimal,
             factor_return=factor_return,
             already_grouped=already_grouped,
+            is_endog_return=is_endog_return,
         )
 
     def fm_reg(
