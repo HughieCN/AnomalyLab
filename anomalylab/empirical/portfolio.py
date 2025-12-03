@@ -550,15 +550,21 @@ class PortfolioAnalysis(Empirical):
 
             return pd.concat([group, sort_diff, sort_avg])
 
+        # Handle potential name collision if endog is same as sort_var or core_var
+        value_col = self.endog
+        if value_col in [sort_var, core_var]:
+            value_col = f"{self.endog}_val"
+
+        ew_ret_d.name = value_col
         ew_ret_d = ew_ret_d.reset_index()
         ew_ret_d = ew_ret_d.pivot(
-            index=[self.time, sort_var], columns=core_var, values=self.endog
+            index=[self.time, sort_var], columns=core_var, values=value_col
         )
 
-        vw_ret_d.name = self.endog
+        vw_ret_d.name = value_col
         vw_ret_d = vw_ret_d.reset_index()
         vw_ret_d = vw_ret_d.pivot(
-            index=[self.time, sort_var], columns=core_var, values=self.endog
+            index=[self.time, sort_var], columns=core_var, values=value_col
         )
 
         ew_ret_d = (
