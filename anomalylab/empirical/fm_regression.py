@@ -49,7 +49,7 @@ class FamaMacBethRegression(Empirical):
         if is_winsorize:
             if self.panel_data.outliers != "Unprocessed":
                 warnings.warn(
-                    "Outliers have been processed, winsorization may not be necessary."
+                    "Outlier handling already performed; winsorization may be unnecessary."
                 )
             self.panel_data = (
                 OutlierHandler(panel_data=self.panel_data)
