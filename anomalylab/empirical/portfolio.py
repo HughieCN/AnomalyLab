@@ -1,6 +1,6 @@
 import warnings
 from dataclasses import dataclass
-from typing import Literal, Optional, Union
+from typing import Hashable, Literal, Optional, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -49,7 +49,7 @@ class PortfolioAnalysis(Empirical):
             raise ValueError(
                 "If 'models' is provided, 'factors_series' must also be provided!"
             )
-        self.ft_series = getattr(self.factors_series, "df", None)
+        self.ft_series: Optional[DataFrame] = getattr(self.factors_series, "df", None)
 
     def add_star(self, mean_val: float, p_val: float) -> str:
         """Add significance stars to mean values based on p-value thresholds.
@@ -137,14 +137,16 @@ class PortfolioAnalysis(Empirical):
 
         # Track original data length for missing value reporting
         original_length = len(self.panel_data.df)
+        endog = cast(str, self.endog)
+        weight = cast(str, self.weight)
 
         # Create working copy with NA removal
         out_df = self.panel_data.df.dropna(
             subset=[
                 self.time,
                 self.id,
-                self.endog,
-                self.weight,
+                endog,
+                weight,
                 *vars,
             ]
         ).copy()
@@ -248,11 +250,12 @@ class PortfolioAnalysis(Empirical):
             dict: A dictionary with mean, t-value, and p-value.
         """
         stat_dict = {}
-        T = df[self.time].nunique()
+        T = cast(int, df[self.time].nunique())
         hac_lag = self.default_hac_lag(T=T, lag=lag)
+        endog = cast(str, self.endog)
 
-        Y = df[self.endog].values
-        X = DataFrame({"constant": [1] * len(df[self.endog])}).values
+        Y = df[endog].values
+        X = DataFrame({"constant": [1] * len(df[endog])}).values
         reg = sm.OLS(Y, X).fit(
             cov_type="HAC", cov_kwds={"maxlags": hac_lag, "use_correction": False}
         )
@@ -261,7 +264,7 @@ class PortfolioAnalysis(Empirical):
         t_value = reg.tvalues[0]
         p_value = reg.pvalues[0]
 
-        key_name = "Return" if is_endog_return else self.endog
+        key_name = "Return" if is_endog_return else endog
         stat_dict[key_name] = mean_value
         stat_dict["t"] = t_value
         stat_dict["p"] = p_value
@@ -283,42 +286,43 @@ class PortfolioAnalysis(Empirical):
         Returns:
             dict: A dictionary containing alpha values, t-values, and p-values for each model.
         """
-        if self.ft_series is not None:
-            if self.models is not None:
-                factors_dict = {}
-                df = pd.merge(
-                    df,
-                    self.ft_series,
-                    left_on=self.time,
-                    right_on=self.factors_series.time,
-                    how="left",
-                )
-                for model, factors in self.models.items():
-                    sub = df.dropna(subset=[self.time, self.endog] + factors)
-                    T = sub[self.time].nunique()
-                    hac_lag = self.default_hac_lag(T=T, lag=lag)
-
-                    Y = sub[self.endog].values
-                    X = sub[factors].values
-                    X = sm.add_constant(X)
-                    reg = sm.OLS(Y, X).fit(
-                        cov_type="HAC",
-                        cov_kwds={"maxlags": hac_lag, "use_correction": False},
-                    )
-
-                    alpha_value = reg.params[0]
-                    t_value = reg.tvalues[0]
-                    p_value = reg.pvalues[0]
-
-                    factors_dict[f"{model}-α"] = alpha_value
-                    factors_dict[f"{model}-t"] = t_value
-                    factors_dict[f"{model}-p"] = p_value
-
-                return factors_dict
-            else:
-                return {}
-        else:
+        ft_series = self.ft_series
+        models = self.models
+        factors_series = self.factors_series
+        if ft_series is None or models is None or factors_series is None:
             return {}
+
+        endog = cast(str, self.endog)
+        factors_dict = {}
+        df = pd.merge(
+            df,
+            ft_series,
+            left_on=self.time,
+            right_on=factors_series.time,
+            how="left",
+        )
+        for model, factors in models.items():
+            sub = df.dropna(subset=[self.time, endog] + factors)
+            T = cast(int, sub[self.time].nunique())
+            hac_lag = self.default_hac_lag(T=T, lag=lag)
+
+            Y = sub[endog].values
+            X = sub[factors].values
+            X = sm.add_constant(X)
+            reg = sm.OLS(Y, X).fit(
+                cov_type="HAC",
+                cov_kwds={"maxlags": hac_lag, "use_correction": False},
+            )
+
+            alpha_value = reg.params[0]
+            t_value = reg.tvalues[0]
+            p_value = reg.pvalues[0]
+
+            factors_dict[f"{model}-α"] = alpha_value
+            factors_dict[f"{model}-t"] = t_value
+            factors_dict[f"{model}-p"] = p_value
+
+        return factors_dict
 
     def _calculate_sharpe(self, df: DataFrame, decimal: Optional[int] = 0) -> dict:
         """Calculate the Sharpe ratio for the dependent variable.
@@ -333,7 +337,8 @@ class PortfolioAnalysis(Empirical):
             dict: A dictionary containing the Sharpe ratio.
         """
         sharpe_dict = {}
-        series = df[self.endog]
+        endog = cast(str, self.endog)
+        series = df[endog]
         ret_mean = series.mean() * np.sqrt(12)
         ret_std = series.std()
         sharpe = ret_mean / ret_std
@@ -354,6 +359,7 @@ class PortfolioAnalysis(Empirical):
         lag: Optional[int] = None,
         tie_break: Literal["error", "random"] = "error",
         random_state: Optional[int] = 42,
+        diff_direction: Literal["high-low", "low-high"] = "high-low",
     ) -> tuple:
         """Perform univariate analysis on the specified core variable.
 
@@ -375,35 +381,48 @@ class PortfolioAnalysis(Empirical):
                 formation fails in ``qcut``.
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
+            diff_direction (Literal["high-low", "low-high"]): Direction used to
+                compute the ``H-L`` or ``L-H`` portfolio. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
+        if diff_direction not in {"high-low", "low-high"}:
+            raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
+        diff_label = "H-L" if diff_direction == "high-low" else "L-H"
 
         if not already_grouped:
-            data_d = self.GroupN(
-                core_var,
-                core_g,
-                tie_break=tie_break,
-                random_state=random_state,
+            data_d = cast(
+                DataFrame,
+                self.GroupN(
+                    core_var,
+                    core_g,
+                    tie_break=tie_break,
+                    random_state=random_state,
+                ),
             )
         else:
             expected_col = f"{core_var}_g{core_g}"
             if expected_col not in self.panel_data.df.columns:
                 raise ValueError(f"Pre-grouped column {expected_col} not found in data")
             data_d = self.panel_data.df.copy()
+        endog = cast(str, self.endog)
+        weight = cast(str, self.weight)
 
-        ew_ret_d: Series = data_d.groupby([self.time, f"{core_var}_g{core_g}"])[
-            self.endog
-        ].mean()
+        ew_ret_d = cast(
+            Series,
+            data_d.groupby([self.time, f"{core_var}_g{core_g}"])[endog].mean(),
+        )
         ew_ret_d.index.names = [self.time, core_var]
-        vw_ret_d: Series = data_d.groupby([self.time, f"{core_var}_g{core_g}"]).apply(
-            lambda x: np.average(x[self.endog], weights=x[self.weight]),  # type: ignore
-            include_groups=False,
-        )  # type: ignore
+        vw_ret_d = cast(
+            Series,
+            data_d.groupby([self.time, f"{core_var}_g{core_g}"])[[endog, weight]]
+            .apply(lambda x: np.average(x[endog], weights=x[weight]))
+            .rename(None),
+        )
         vw_ret_d.index.names = [self.time, core_var]
 
-        def process_group(group: DataFrame) -> Series:
+        def process_group(group: Series) -> Series:
             """Process each group to calculate differences and prepare the output.
 
             This function computes the difference between the highest portfolio and the lowest
@@ -417,14 +436,18 @@ class PortfolioAnalysis(Empirical):
             """
             group = group.sort_index(axis=0, level=[0, 1])
 
-            core_diff = group.iloc[core_g - 1] - group.iloc[0]
+            if diff_direction == "high-low":
+                core_diff = group.iloc[core_g - 1] - group.iloc[0]
+            else:
+                core_diff = group.iloc[0] - group.iloc[core_g - 1]
+            time_value = cast(Hashable, group.index.get_level_values(0)[0])
             new_index = pd.MultiIndex.from_tuples(
-                [(group.index.get_level_values(0)[0], "Diff")],
+                [(time_value, diff_label)],
                 names=[self.time, core_var],
             )
             core_diff = Series(core_diff, index=new_index)
 
-            return pd.concat([group, core_diff])
+            return cast(Series, pd.concat([group, core_diff]))
 
         ew_ret_d = (
             ew_ret_d.groupby(level=0)
@@ -455,7 +478,7 @@ class PortfolioAnalysis(Empirical):
 
             for core in series.index.get_level_values(core_var).unique():
                 time_series_dict[core] = (
-                    series.loc[(slice(None), core)].to_frame(self.endog).reset_index()
+                    series.loc[(slice(None), core)].to_frame(endog).reset_index()
                 )
 
             return time_series_dict
@@ -487,7 +510,7 @@ class PortfolioAnalysis(Empirical):
                     lag=lag,
                 )
 
-            key_name = "Return" if is_endog_return else self.endog
+            key_name = "Return" if is_endog_return else endog
             data = []
             for key, values in results.items():
                 if key_name == core_var:
@@ -541,7 +564,7 @@ class PortfolioAnalysis(Empirical):
         core_g: int,
         pivot: bool = True,
         format: bool = False,
-        sort_type: str = "dependent",
+        sort_type: Literal["independent", "dependent"] = "dependent",
         decimal: Optional[int] = None,
         factor_return: bool = False,
         already_grouped: bool = False,
@@ -549,6 +572,7 @@ class PortfolioAnalysis(Empirical):
         lag: Optional[int] = None,
         tie_break: Literal["error", "random"] = "error",
         random_state: Optional[int] = 42,
+        diff_direction: Literal["high-low", "low-high"] = "high-low",
     ) -> tuple:
         """Perform bivariate analysis on two specified variables.
 
@@ -574,18 +598,26 @@ class PortfolioAnalysis(Empirical):
                 formation fails in ``qcut``.
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
+            diff_direction (Literal["high-low", "low-high"]): Direction used to
+                compute the ``H-L`` or ``L-H`` portfolios. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
+        if diff_direction not in {"high-low", "low-high"}:
+            raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
+        diff_label = "H-L" if diff_direction == "high-low" else "L-H"
 
         if not already_grouped:
-            data_d = self.GroupN(
-                [sort_var, core_var],
-                [sort_g, core_g],
-                sort_type=sort_type,
-                tie_break=tie_break,
-                random_state=random_state,
+            data_d = cast(
+                DataFrame,
+                self.GroupN(
+                    [sort_var, core_var],
+                    [sort_g, core_g],
+                    sort_type=sort_type,
+                    tie_break=tie_break,
+                    random_state=random_state,
+                ),
             )
         else:
             # Check existence of both pre-grouped columns when using existing groups
@@ -600,16 +632,20 @@ class PortfolioAnalysis(Empirical):
                     f"Required columns: {required_columns}"
                 )
             data_d = self.panel_data.df.copy()
+        endog = cast(str, self.endog)
+        weight = cast(str, self.weight)
 
         ew_ret_d = data_d.groupby(
             [self.time, f"{sort_var}_g{sort_g}", f"{core_var}_g{core_g}"]
-        )[self.endog].mean()
+        )[endog].mean()
         ew_ret_d.index.names = [self.time, sort_var, core_var]
-        vw_ret_d = data_d.groupby(
-            [self.time, f"{sort_var}_g{sort_g}", f"{core_var}_g{core_g}"]
-        ).apply(
-            lambda x: np.average(x[self.endog], weights=x[self.weight]),  # type: ignore
-            include_groups=False,
+        vw_ret_d = cast(
+            Series,
+            data_d.groupby(
+                [self.time, f"{sort_var}_g{sort_g}", f"{core_var}_g{core_g}"]
+            )[[endog, weight]]
+            .apply(lambda x: np.average(x[endog], weights=x[weight]))
+            .rename(None),
         )
         vw_ret_d.index.names = [self.time, sort_var, core_var]
 
@@ -632,28 +668,35 @@ class PortfolioAnalysis(Empirical):
             group = group.sort_index(axis=0, level=[0, 1])
             group = group.sort_index(axis=1)
 
-            group["Diff"] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
+            if diff_direction == "high-low":
+                group[diff_label] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
+            else:
+                group[diff_label] = group.iloc[:, 0] - group.iloc[:, core_g - 1]
             group["Avg"] = group.iloc[:, :core_g].mean(axis=1)
 
-            sort_diff = group.iloc[sort_g - 1] - group.iloc[0]
+            if diff_direction == "high-low":
+                sort_diff = group.iloc[sort_g - 1] - group.iloc[0]
+            else:
+                sort_diff = group.iloc[0] - group.iloc[sort_g - 1]
             sort_diff = sort_diff.to_frame().T
+            time_value = cast(Hashable, group.index.get_level_values(0)[0])
             sort_diff.index = pd.MultiIndex.from_tuples(
-                [(group.index.get_level_values(0)[0], "Diff")],
+                [(time_value, diff_label)],
                 names=[self.time, sort_var],
             )
 
             sort_avg = group.iloc[:sort_g].mean().to_frame().T
             sort_avg.index = pd.MultiIndex.from_tuples(
-                [(group.index.get_level_values(0)[0], "Avg")],
+                [(time_value, "Avg")],
                 names=[self.time, sort_var],
             )
 
             return pd.concat([group, sort_diff, sort_avg])
 
         # Handle potential name collision if endog is same as sort_var or core_var
-        value_col = self.endog
+        value_col = endog
         if value_col in [sort_var, core_var]:
-            value_col = f"{self.endog}_val"
+            value_col = f"{endog}_val"
 
         ew_ret_d.name = value_col
         ew_ret_d = ew_ret_d.reset_index()
@@ -698,7 +741,7 @@ class PortfolioAnalysis(Empirical):
                 for column in df.columns:
                     time_series = df.loc[(slice(None), sort), column]
                     time_series = (
-                        time_series.to_frame(self.endog)
+                        time_series.to_frame(endog)
                         .reset_index(level=0)
                         .reset_index(drop=True)
                     )
@@ -736,7 +779,7 @@ class PortfolioAnalysis(Empirical):
                 )
                 results[key] = value_dict
 
-            key_name = "Return" if is_endog_return else self.endog
+            key_name = "Return" if is_endog_return else endog
             data = []
             for key, values in results.items():
                 if key_name in [sort_var, core_var]:
@@ -777,7 +820,7 @@ class PortfolioAnalysis(Empirical):
             ]
 
             def reorder_diff_avg(df: DataFrame) -> DataFrame:
-                """Reorder the rows and columns of a DataFrame to place 'Diff' before 'Avg'.
+                """Reorder rows and columns to place the difference before 'Avg'.
 
                 This function rearranges the DataFrame to improve readability.
 
@@ -788,14 +831,14 @@ class PortfolioAnalysis(Empirical):
                     DataFrame: The reordered DataFrame.
                 """
                 columns_order = [
-                    col for col in df.columns if col not in ["Diff", "Avg"]
-                ] + ["Diff", "Avg"]
-                df = df[columns_order]
+                    col for col in df.columns if col not in [diff_label, "Avg"]
+                ] + [diff_label, "Avg"]
+                df = cast(DataFrame, df.loc[:, columns_order])
 
                 index_order = [
-                    idx for idx in df.index if idx not in ["Diff", "Avg"]
-                ] + ["Diff", "Avg"]
-                df = df.loc[index_order]
+                    idx for idx in df.index if idx not in [diff_label, "Avg"]
+                ] + [diff_label, "Avg"]
+                df = cast(DataFrame, df.loc[index_order, :])
 
                 return df
 
