@@ -377,13 +377,14 @@ class PortfolioAnalysis(Empirical):
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
             diff_direction (Literal["high-low", "low-high"]): Direction used to
-                compute the ``Diff`` portfolio. Defaults to "high-low".
+                compute the ``H-L`` or ``L-H`` portfolio. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
         if diff_direction not in {"high-low", "low-high"}:
             raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
+        diff_label = "H-L" if diff_direction == "high-low" else "L-H"
 
         if not already_grouped:
             data_d = self.GroupN(
@@ -427,7 +428,7 @@ class PortfolioAnalysis(Empirical):
             else:
                 core_diff = group.iloc[0] - group.iloc[core_g - 1]
             new_index = pd.MultiIndex.from_tuples(
-                [(group.index.get_level_values(0)[0], "Diff")],
+                [(group.index.get_level_values(0)[0], diff_label)],
                 names=[self.time, core_var],
             )
             core_diff = Series(core_diff, index=new_index)
@@ -584,13 +585,14 @@ class PortfolioAnalysis(Empirical):
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
             diff_direction (Literal["high-low", "low-high"]): Direction used to
-                compute the ``Diff`` portfolios. Defaults to "high-low".
+                compute the ``H-L`` or ``L-H`` portfolios. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
         if diff_direction not in {"high-low", "low-high"}:
             raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
+        diff_label = "H-L" if diff_direction == "high-low" else "L-H"
 
         if not already_grouped:
             data_d = self.GroupN(
@@ -646,9 +648,9 @@ class PortfolioAnalysis(Empirical):
             group = group.sort_index(axis=1)
 
             if diff_direction == "high-low":
-                group["Diff"] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
+                group[diff_label] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
             else:
-                group["Diff"] = group.iloc[:, 0] - group.iloc[:, core_g - 1]
+                group[diff_label] = group.iloc[:, 0] - group.iloc[:, core_g - 1]
             group["Avg"] = group.iloc[:, :core_g].mean(axis=1)
 
             if diff_direction == "high-low":
@@ -657,7 +659,7 @@ class PortfolioAnalysis(Empirical):
                 sort_diff = group.iloc[0] - group.iloc[sort_g - 1]
             sort_diff = sort_diff.to_frame().T
             sort_diff.index = pd.MultiIndex.from_tuples(
-                [(group.index.get_level_values(0)[0], "Diff")],
+                [(group.index.get_level_values(0)[0], diff_label)],
                 names=[self.time, sort_var],
             )
 
@@ -796,7 +798,7 @@ class PortfolioAnalysis(Empirical):
             ]
 
             def reorder_diff_avg(df: DataFrame) -> DataFrame:
-                """Reorder the rows and columns of a DataFrame to place 'Diff' before 'Avg'.
+                """Reorder rows and columns to place the difference before 'Avg'.
 
                 This function rearranges the DataFrame to improve readability.
 
@@ -807,13 +809,13 @@ class PortfolioAnalysis(Empirical):
                     DataFrame: The reordered DataFrame.
                 """
                 columns_order = [
-                    col for col in df.columns if col not in ["Diff", "Avg"]
-                ] + ["Diff", "Avg"]
+                    col for col in df.columns if col not in [diff_label, "Avg"]
+                ] + [diff_label, "Avg"]
                 df = df[columns_order]
 
                 index_order = [
-                    idx for idx in df.index if idx not in ["Diff", "Avg"]
-                ] + ["Diff", "Avg"]
+                    idx for idx in df.index if idx not in [diff_label, "Avg"]
+                ] + [diff_label, "Avg"]
                 df = df.loc[index_order]
 
                 return df

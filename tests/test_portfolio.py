@@ -41,8 +41,8 @@ def test_univariate_analysis_can_return_low_minus_high_diff():
         diff_direction="low-high",
     )
 
-    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "Diff")] == -3.0
-    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "Diff")] == -6.0
+    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "L-H")] == -3.0
+    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "L-H")] == -6.0
 
 
 def test_univariate_analysis_defaults_to_high_minus_low_diff():
@@ -55,8 +55,8 @@ def test_univariate_analysis_defaults_to_high_minus_low_diff():
         factor_return=True,
     )
 
-    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "Diff")] == 3.0
-    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "Diff")] == 6.0
+    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "H-L")] == 3.0
+    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "H-L")] == 6.0
 
 
 def test_bivariate_analysis_can_return_low_minus_high_diff():
@@ -72,6 +72,6 @@ def test_bivariate_analysis_can_return_low_minus_high_diff():
         diff_direction="low-high",
     )
 
-    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), 1), "Diff"] == -2.0
-    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "Diff"), 1] == -1.0
-    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "Diff"), "Diff"] == 4.0
+    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), 1), "L-H"] == -2.0
+    assert ew_ret.loc[(pd.Period("2020-01", freq="M"), "L-H"), 1] == -1.0
+    assert vw_ret.loc[(pd.Period("2020-02", freq="M"), "L-H"), "L-H"] == 4.0
