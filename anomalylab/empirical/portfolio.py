@@ -354,6 +354,7 @@ class PortfolioAnalysis(Empirical):
         lag: Optional[int] = None,
         tie_break: Literal["error", "random"] = "error",
         random_state: Optional[int] = 42,
+        diff_direction: Literal["high-low", "low-high"] = "high-low",
     ) -> tuple:
         """Perform univariate analysis on the specified core variable.
 
@@ -375,10 +376,14 @@ class PortfolioAnalysis(Empirical):
                 formation fails in ``qcut``.
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
+            diff_direction (Literal["high-low", "low-high"]): Direction used to
+                compute the ``Diff`` portfolio. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
+        if diff_direction not in {"high-low", "low-high"}:
+            raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
 
         if not already_grouped:
             data_d = self.GroupN(
@@ -417,7 +422,10 @@ class PortfolioAnalysis(Empirical):
             """
             group = group.sort_index(axis=0, level=[0, 1])
 
-            core_diff = group.iloc[core_g - 1] - group.iloc[0]
+            if diff_direction == "high-low":
+                core_diff = group.iloc[core_g - 1] - group.iloc[0]
+            else:
+                core_diff = group.iloc[0] - group.iloc[core_g - 1]
             new_index = pd.MultiIndex.from_tuples(
                 [(group.index.get_level_values(0)[0], "Diff")],
                 names=[self.time, core_var],
@@ -549,6 +557,7 @@ class PortfolioAnalysis(Empirical):
         lag: Optional[int] = None,
         tie_break: Literal["error", "random"] = "error",
         random_state: Optional[int] = 42,
+        diff_direction: Literal["high-low", "low-high"] = "high-low",
     ) -> tuple:
         """Perform bivariate analysis on two specified variables.
 
@@ -574,10 +583,14 @@ class PortfolioAnalysis(Empirical):
                 formation fails in ``qcut``.
             random_state (Optional[int]): Seed used when ``tie_break="random"``.
                 Defaults to 42.
+            diff_direction (Literal["high-low", "low-high"]): Direction used to
+                compute the ``Diff`` portfolios. Defaults to "high-low".
 
         Returns:
             tuple: A tuple containing the equal-weighted and value-weighted results DataFrames.
         """
+        if diff_direction not in {"high-low", "low-high"}:
+            raise ValueError("diff_direction must be one of ['high-low', 'low-high']")
 
         if not already_grouped:
             data_d = self.GroupN(
@@ -632,10 +645,16 @@ class PortfolioAnalysis(Empirical):
             group = group.sort_index(axis=0, level=[0, 1])
             group = group.sort_index(axis=1)
 
-            group["Diff"] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
+            if diff_direction == "high-low":
+                group["Diff"] = group.iloc[:, core_g - 1] - group.iloc[:, 0]
+            else:
+                group["Diff"] = group.iloc[:, 0] - group.iloc[:, core_g - 1]
             group["Avg"] = group.iloc[:, :core_g].mean(axis=1)
 
-            sort_diff = group.iloc[sort_g - 1] - group.iloc[0]
+            if diff_direction == "high-low":
+                sort_diff = group.iloc[sort_g - 1] - group.iloc[0]
+            else:
+                sort_diff = group.iloc[0] - group.iloc[sort_g - 1]
             sort_diff = sort_diff.to_frame().T
             sort_diff.index = pd.MultiIndex.from_tuples(
                 [(group.index.get_level_values(0)[0], "Diff")],
